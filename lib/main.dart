@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:location/location.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 void main() {
@@ -35,7 +37,7 @@ class LocationApp extends StatefulWidget {
 }
 
 class _LocationAppState extends State<LocationApp> {
-  int _counter = 2;
+  int _counter = 0;
 
   void _incrementCounter() {
     setState(() {
@@ -48,7 +50,20 @@ class _LocationAppState extends State<LocationApp> {
     });
   }
 
+  LocationData _currentPosition;
+  String _dateTime;
+  DateFormat dateFormat = DateFormat("yyyy/MM/dd HH:mm:ss");
+  StreamSubscription<LocationData> locationSubscription;
+  Location location = Location();
+  String _error;
 
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    getCurrentLocation();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,11 +112,25 @@ class _LocationAppState extends State<LocationApp> {
               style: TextStyle(fontSize: 26.0, fontWeight: FontWeight.bold),
             ),
             SizedBox(
-              height: 10.0,
+              height: 3,
             ),
-            Text(""),
+            if (_dateTime != null)
+              Text(
+                "Last Checked: $_dateTime",
+                style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold),
+              ),
+            SizedBox(
+              height: 20.0,
+            ),
+            _currentPosition != null ? Text('Latitude: ${_currentPosition.latitude}, Longitude: ${_currentPosition.longitude}') : Text('Waiting on GPS'),
+            _error != null ? Text('Error is: $_error') : Text('No Error'),
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                getCurrentLocation();
+              },
               style: TextButton.styleFrom(
                 backgroundColor: Colors.blue[800],
               ),
@@ -127,7 +156,7 @@ class _LocationAppState extends State<LocationApp> {
               'You have pushed the button this many times:',
             ),
             Text(
-              '$_counter',
+              'GPS updated $_counter times',
               style: Theme.of(context).textTheme.headline4,
             ),
             Slidable(
@@ -179,5 +208,49 @@ class _LocationAppState extends State<LocationApp> {
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  getCurrentLocation() async {
+    bool _serviceEnabled;
+    PermissionStatus _permissionGranted;
+
+    _serviceEnabled = await location.serviceEnabled();
+    if (!_serviceEnabled) {
+      _serviceEnabled = await location.requestService();
+      if (!_serviceEnabled) {
+        return;
+      }
+    }
+
+    _permissionGranted = await location.hasPermission();
+    if (_permissionGranted == PermissionStatus.denied) {
+      _permissionGranted = await location.requestPermission();
+      if (_permissionGranted != PermissionStatus.granted) {
+        return;
+      }
+    }
+    location.changeSettings(accuracy:LocationAccuracy.powerSave, interval: 30, distanceFilter: 1.0);
+
+    locationSubscription =
+        location.onLocationChanged.handleError((dynamic err) {
+          setState(() {
+            _error = err.code;
+          });
+          locationSubscription.cancel();
+        }).listen((LocationData currentLocation) {
+          setState(() {
+            _error = null;
+            _currentPosition = currentLocation;
+            _incrementCounter();
+            print(_currentPosition);
+            _dateTime = dateFormat.format(DateTime.fromMillisecondsSinceEpoch(currentLocation.time.toInt()));
+          });
+        });
+    // location.onLocationChanged.listen((LocationData currentLocation) {
+    //   setState(() {
+    //     _currentPosition = currentLocation;
+    //     _dateTime = dateFormat.format(DateTime.fromMillisecondsSinceEpoch(currentLocation.time.toInt()));
+    //   });
+    // });
   }
 }
